@@ -4,7 +4,7 @@ parsec for nim
 
 ## example 
 
-```
+```nim
 
   let aParser = charp('a')
   let bParser = charp('b')
