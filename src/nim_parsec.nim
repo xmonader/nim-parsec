@@ -48,7 +48,6 @@ proc `$`*(this:Parser): string =
 proc parse*(this: Parser, s:string): Either =
   return this.f(s)
 
-
 proc runParser(p: Parser, s: string): Either =
   echo $p
   return p.parse(s)
@@ -57,7 +56,6 @@ proc runParser(parsergenfn: proc():Parser, s:string): Either=
   var p = parsergenfn()
   return runparser(p, s)
 
- 
 proc map*(this:Parser, transformer:proc(l:seq[string]):seq[string]):Parser =
   proc inner(s:string):Either = 
     return this.f(s).map(transformer)
@@ -103,8 +101,6 @@ proc orElse(p1, p2: Parser): Parser =
         of ekRight:
           return res
         of ekLeft:
-          echo "S in orElse: " & s
-          echo "P2 is " & $p2
           let res = p2.parse(s)
           case res.kind
           of ekLeft:
@@ -144,8 +140,6 @@ proc n(parser:Parser, count:int): Parser =
 
 proc `*`(this:Parser, times:int):Parser =
        return n(this, times) 
-
-
 
 proc charp(c: char): Parser =
   proc curried(s:string):Either =
@@ -201,7 +195,6 @@ let chars = parseString
 
 proc parseZeroOrMore(parser: Parser, inp:string): Either = #zero or more
     let res = parser.parse(inp)
-    echo "RES :" & $res
     case res.kind
     of ekLeft:
       let myparsed: seq[string] = @[]
@@ -225,6 +218,7 @@ proc parseZeroOrMore(parser: Parser, inp:string): Either = #zero or more
         let myparsed: seq[string] = @[]
         return Either(kind:ekRight, val:(parsed:myparsed, remaining:inp))
       
+
 proc many(parser:Parser):Parser =
     proc curried(s: string): Either =
         return parse_zero_or_more(parser,s)
@@ -233,6 +227,10 @@ proc many(parser:Parser):Parser =
     # let transformer = proc(l:seq[string]):seq[string]= @[join(l, "")]
     return newParser(f=curried) #.map(transformer)
 
+proc many(comb:proc(): Parser): Parser =
+  proc curried(s: string): Either =
+    return many(comb()).parse(s)
+  return newParser(f=curried) #.map(transformer)
 
 proc many1(parser:Parser): Parser =
     proc curried(s: string): Either =
@@ -244,16 +242,24 @@ proc many1(parser:Parser): Parser =
           return many(parser).parse(s)
     return newParser(f=curried)
 
-
+proc many1(comb:proc():Parser): Parser =
+    proc curried(s:string): Either =
+      return many1(comb()).parse(s)
+    return newParser(f=curried)
+  
 proc optionally(parser: Parser): Parser =
     let myparsed = @[""]
     let nonproc = proc(s:string):Either = Either(kind:ekRight, val:(parsed:myparsed, remaining:""))
     let noneparser = newParser(f=nonproc)
     return parser | noneparser
 
+proc optionally(comb: proc():Parser) : Parser =
+  proc curried(s: string): Either =
+    return optionally(comb()).parse(s)
+  return newParser(f=curried)
+
 proc sep_by1(sep: Parser, parser:Parser): Parser =
     let sep_then_parser = sep >> parser
-    echo "sepby1 is called again"
     return (parser >> many(sep_then_parser))
 
 proc sep_by(sep: Parser, parser:Parser): Parser =
@@ -261,11 +267,11 @@ proc sep_by(sep: Parser, parser:Parser): Parser =
   let nonproc = proc(s:string):Either = Either(kind:ekRight, val:(parsed:myparsed, remaining:""))
   return (sep_by1(sep, parser) | newParser(f=nonproc))
 
-proc forward(parsergeneratorfn: proc():Parser): proc(s: string): Either =
+proc sep_by(sep: Parser, comb: proc():Parser) : Parser =
   proc curried(s: string): Either =
-    let p: Parser = parsergeneratorfn()
-    return p.parse(s)
-  return curried
+    return sep_by(sep, comb()).parse(s)
+  return newParser(f=curried)
+
 
 let smashtransformer = proc(l:seq[string]):seq[string]= @[join(l, "")]
 
@@ -283,56 +289,55 @@ let between = proc(p1, p2, p3: Parser): Parser =
     return p1 >> p2 >> p3
 let surroundedBy = proc(surparser, contentparser: Parser): Parser =
     return surparser >> contentparser >> surparser
-let option = optionally
 
 
-let aParser = charp('a')
-let bParser = charp('b')
-echo $aParser.parse("abc")
-echo $bParser.parse("bca")
+when isMainModule:
+  let aParser = charp('a')
+  let bParser = charp('b')
+  echo $aParser.parse("abc")
+  echo $bParser.parse("bca")
 
-let abParser = charp('a') >> charp('b')
-echo $abParser.parse("abc")
+  let abParser = charp('a') >> charp('b')
+  echo $abParser.parse("abc")
 
-let aorbParser = charp('a') | charp('b')
-echo $aorbParser.parse("acd")
-echo $aorbParser.parse("bcd")
+  let aorbParser = charp('a') | charp('b')
+  echo $aorbParser.parse("acd")
+  echo $aorbParser.parse("bcd")
 
-let abcParser = parseString("abc")
-echo $abcParser.parse("abcdef")
+  let abcParser = parseString("abc")
+  echo $abcParser.parse("abcdef")
 
-let manyA = many(charp('a'))
-echo $manyA.parse("aaab")
-echo $manyA.parse("bbb")
+  let manyA = many(charp('a'))
+  echo $manyA.parse("aaab")
+  echo $manyA.parse("bbb")
 
-let manyA1 = many1(charp('a'))
-echo $manyA1.parse("aaab")
-echo $manyA1.parse("bbb")
+  let manyA1 = many1(charp('a'))
+  echo $manyA1.parse("aaab")
+  echo $manyA1.parse("bbb")
 
-let manyDigits = many1(digit)
-echo $manyDigits.parse("1234")
+  let manyDigits = many1(digit)
+  echo $manyDigits.parse("1234")
 
-let commaseparatednums = sep_by(charp(',').suppress(), digit)
-echo $commaseparatednums.parse("1,2,4")
+  let commaseparatednums = sep_by(charp(',').suppress(), digit)
+  echo $commaseparatednums.parse("1,2,4")
 
-#let greetparser = letters >> charp(',') >> many(ws) >> letters
-let greetparser = word >> charp(',').suppress() >> many(ws).suppress() >> word
-echo $greetparser.parse("Hello,   World")
+  #let greetparser = letters >> charp(',') >> many(ws) >> letters
+  let greetparser = word >> charp(',').suppress() >> many(ws).suppress() >> word
+  echo $greetparser.parse("Hello,   World")
 
-echo $(letter*3).parse("abc")
+  echo $(letter*3).parse("abc")
 
-let uuidsample = "db9674c4-72a9-4ab9-9ddd-1d641a37cde4"
-let uuidparser =(hexstr*8).map(smashtransformer) >> charp('-') >> (hexstr*4).map(smashtransformer) >> charp('-') >>  (hexstr*4).map(smashtransformer) >> charp('-') >> (hexstr*4).map(smashtransformer) >> charp('-') >> (hexstr*12).map(smashtransformer)
-echo $uuidparser.parse(uuidsample)
+  let uuidsample = "db9674c4-72a9-4ab9-9ddd-1d641a37cde4"
+  let uuidparser =(hexstr*8).map(smashtransformer) >> charp('-') >> (hexstr*4).map(smashtransformer) >> charp('-') >>  (hexstr*4).map(smashtransformer) >> charp('-') >> (hexstr*4).map(smashtransformer) >> charp('-') >> (hexstr*12).map(smashtransformer)
+  echo $uuidparser.parse(uuidsample)
 
 
-# recursive lang ints and list of ints or lists
-var listp: Parser
-var valp = forward(proc():Parser =digits|listp)
-listp = charp('[') >> sep_by(charp(',').suppress(), many1(valp)) >> charp(']')
-valp = listp|digits
+  # recursive lang ints and list of ints or lists
+  var listp: Parser
+  var valref = (proc():Parser =digits|listp)
+  listp = charp('[') >> sep_by(charp(',').suppress(), many(valref)) >> charp(']')
+  var valp = valref()
 
-echo $valp.parse("1")
-echo "DONE"
-echo $valp.parse("[1,2]")
-# echo $valp.parse("[1,[1,2]]")
+  echo $valp.parse("1")
+  echo $valp.parse("[1,2]")
+  echo $valp.parse("[1,[1,2]]")
