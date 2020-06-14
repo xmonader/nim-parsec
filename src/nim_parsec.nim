@@ -1,11 +1,7 @@
 # nim_parsec
 # Copyright xmonader
 # parsec for nim
-import options, strformat, strutils, sequtils
-import json
-
-#from functools import reduce
-#flatten = lambda l: [item for sublist in l for item in (sublist if isinstance(sublist, list) else [sublist] )]
+import strformat, strutils, sequtils
 
 type 
   EitherKind = enum
@@ -143,7 +139,7 @@ proc `*`(this:Parser, times:int):Parser =
 
 proc charp(c: char): Parser =
   proc curried(s:string):Either =
-      if s.isNilOrEmpty():
+      if s == "":
           let msg = "S is empty"
           return Either(kind:ekLeft, msg:msg)
       else:
@@ -170,7 +166,7 @@ proc parseString(s:string): Parser =
 
 proc until_seq(s:string): Parser = 
     proc curried(inp:string):Either =
-        if inp.isNilOrEmpty():
+        if inp == "":
             let msg = "S is empty"
             return Either(kind:ekLeft, msg:msg)
         else:
