@@ -21,7 +21,7 @@ proc map*(this: Either, f: proc(l:seq[string]):seq[string]): Either =
 
 proc `$`*(this:Either): string =
   case this.kind
-  of ekLeft: return fmt"Left {this.msg}"
+  of ekLeft: return fmt"<Left {this.msg}>"
   of ekRight: return fmt("<Right parsed: {this.val.parsed}, remaining: {this.val.remaining} >")
 
 proc `==`*(this: Either, other: Either): bool =
@@ -44,11 +44,11 @@ proc `$`*(this:Parser): string =
 proc parse*(this: Parser, s:string): Either =
   return this.f(s)
 
-proc runParser(p: Parser, s: string): Either =
+proc runParser*(p: Parser, s: string): Either =
   echo $p
   return p.parse(s)
 
-proc runParser(parsergenfn: proc():Parser, s:string): Either=
+proc runParser*(parsergenfn: proc():Parser, s:string): Either=
   var p = parsergenfn()
   return runparser(p, s)
 
@@ -65,7 +65,7 @@ proc suppress*(this: Parser): Parser =
 proc runParser*(p: Parser, inp: string): Either= 
     return p.parse(inp)
 
-proc andThen(p1: Parser, p2: Parser): Parser =
+proc andThen*(p1: Parser, p2: Parser): Parser =
     proc curried(s: string) : Either= 
         let res1 = p1.parse(s)
         case res1.kind
@@ -90,7 +90,7 @@ proc andThen(p1: Parser, p2: Parser): Parser =
     return newParser(f=curried)
 
 
-proc orElse(p1, p2: Parser): Parser =
+proc orElse*(p1, p2: Parser): Parser =
     proc curried(s: string):Either=
         let res = p1.parse(s)
         case res.kind
@@ -106,17 +106,17 @@ proc orElse(p1, p2: Parser): Parser =
 
     return newParser(curried)
 
-proc `>>`(this: Parser, rparser:Parser): Parser =
+proc `>>`*(this: Parser, rparser:Parser): Parser =
   return andThen(this, rparser)
 
-proc `>>`(this: Parser, parsergenfn: proc():Parser): Parser =
+proc `>>`*(this: Parser, parsergenfn: proc():Parser): Parser =
   return andThen(this, parsergenfn())
 
-proc `|`(this: Parser, rparser: Parser): Parser =
+proc `|`*(this: Parser, rparser: Parser): Parser =
   return orElse(this, rparser)
 
 
-proc n(parser:Parser, count:int): Parser = 
+proc n*(parser:Parser, count:int): Parser = 
     proc curried(s: string): Either =
         var mys = s
         var fullparsed: seq[string] = @[]
@@ -134,10 +134,10 @@ proc n(parser:Parser, count:int): Parser =
     return newParser(f=curried)
     
 
-proc `*`(this:Parser, times:int):Parser =
+proc `*`*(this:Parser, times:int):Parser =
        return n(this, times) 
 
-proc charp(c: char): Parser =
+proc charp*(c: char): Parser =
   proc curried(s:string):Either =
       if s == "":
           let msg = "S is empty"
@@ -154,17 +154,17 @@ proc charp(c: char): Parser =
 proc choice*(parsers: seq[Parser]): Parser = 
     return foldl(parsers, a | b)
 
-proc anyOf(chars: set[char]): Parser =
+proc anyOf*(chars: set[char]): Parser =
     return choice(mapIt(chars, charp(it)))
 
-proc parseString(s:string): Parser =
+proc parseString*(s:string): Parser =
   var parsers: seq[Parser] = newSeq[Parser]()
   for c in s:
     parsers.add(charp(c))
   var p = foldl(parsers, a >> b)
   return p.map(proc(l:seq[string]):seq[string] = @[join(l, "")])
 
-proc until_seq(s:string): Parser = 
+proc until_seq*(s:string): Parser = 
     proc curried(inp:string):Either =
         if inp == "":
             let msg = "S is empty"
@@ -177,7 +177,7 @@ proc until_seq(s:string): Parser =
                 return Either(kind:ekLeft, msg:"Expecting '{s}' and found '{inp[0..<s.len]}'")
     return newParser(f=curried)
 
-proc until(p:Parser): Parser =
+proc until*(p:Parser): Parser =
     proc curried(s:string):Either =
         let res = p.parse(s)
         case res.kind
@@ -187,7 +187,7 @@ proc until(p:Parser): Parser =
           return Either(kind:ekRight, val:(parsed:myparsed, remaining:s))
     return newParser(f=curried)
 
-let chars = parseString
+let chars* = parseString
 
 proc parseZeroOrMore(parser: Parser, inp:string): Either = #zero or more
     let res = parser.parse(inp)
@@ -215,7 +215,7 @@ proc parseZeroOrMore(parser: Parser, inp:string): Either = #zero or more
         return Either(kind:ekRight, val:(parsed:myparsed, remaining:inp))
       
 
-proc many(parser:Parser):Parser =
+proc many*(parser:Parser):Parser =
     proc curried(s: string): Either =
         return parse_zero_or_more(parser,s)
     
@@ -223,12 +223,12 @@ proc many(parser:Parser):Parser =
     # let transformer = proc(l:seq[string]):seq[string]= @[join(l, "")]
     return newParser(f=curried) #.map(transformer)
 
-proc many(comb:proc(): Parser): Parser =
+proc many*(comb:proc(): Parser): Parser =
   proc curried(s: string): Either =
     return many(comb()).parse(s)
   return newParser(f=curried) #.map(transformer)
 
-proc many1(parser:Parser): Parser =
+proc many1*(parser:Parser): Parser =
     proc curried(s: string): Either =
         let res = parser.parse(s)
         case res.kind
@@ -238,32 +238,32 @@ proc many1(parser:Parser): Parser =
           return many(parser).parse(s)
     return newParser(f=curried)
 
-proc many1(comb:proc():Parser): Parser =
+proc many1*(comb:proc():Parser): Parser =
     proc curried(s:string): Either =
       return many1(comb()).parse(s)
     return newParser(f=curried)
   
-proc optionally(parser: Parser): Parser =
+proc optionally*(parser: Parser): Parser =
     let myparsed = @[""]
     let nonproc = proc(s:string):Either = Either(kind:ekRight, val:(parsed:myparsed, remaining:""))
     let noneparser = newParser(f=nonproc)
     return parser | noneparser
 
-proc optionally(comb: proc():Parser) : Parser =
+proc optionally*(comb: proc():Parser) : Parser =
   proc curried(s: string): Either =
     return optionally(comb()).parse(s)
   return newParser(f=curried)
 
-proc sep_by1(sep: Parser, parser:Parser): Parser =
+proc sep_by1*(sep: Parser, parser:Parser): Parser =
     let sep_then_parser = sep >> parser
     return (parser >> many(sep_then_parser))
 
-proc sep_by(sep: Parser, parser:Parser): Parser =
+proc sep_by*(sep: Parser, parser:Parser): Parser =
   let myparsed = @[""]
   let nonproc = proc(s:string):Either = Either(kind:ekRight, val:(parsed:myparsed, remaining:""))
   return (sep_by1(sep, parser) | newParser(f=nonproc))
 
-proc sep_by(sep: Parser, comb: proc():Parser) : Parser =
+proc sep_by*(sep: Parser, comb: proc():Parser) : Parser =
   proc curried(s: string): Either =
     return sep_by(sep, comb()).parse(s)
   return newParser(f=curried)
@@ -318,22 +318,82 @@ when isMainModule:
   echo $commaseparatednums.parse("1,2,4")
 
   #let greetparser = letters >> charp(',') >> many(ws) >> letters
-  let greetparser = word >> charp(',').suppress() >> many(ws).suppress() >> word
+  let greetparser = word >> charp(',').suppress() >> many(ws).suppress() >> word >> optionally(charp('!'))
   echo $greetparser.parse("Hello,   World")
+  echo $greetparser.parse("Hello,   World!")
+
 
   echo $(letter*3).parse("abc")
 
   let uuidsample = "db9674c4-72a9-4ab9-9ddd-1d641a37cde4"
   let uuidparser =(hexstr*8).map(smashtransformer) >> charp('-') >> (hexstr*4).map(smashtransformer) >> charp('-') >>  (hexstr*4).map(smashtransformer) >> charp('-') >> (hexstr*4).map(smashtransformer) >> charp('-') >> (hexstr*12).map(smashtransformer)
   echo $uuidparser.parse(uuidsample)
+  
+
+  let sur3pipe = surroundedBy(charp('|'), charp('3'))
+  echo $sur3pipe.parse("|3|")
+
+  let paren3 = between(charp('('), charp('3'), charp(')') )
+  echo paren3.parse("(3)")
+
 
 
   # recursive lang ints and list of ints or lists
+  type 
+    LangElemKind = enum
+        leChr, leList
+    LangElem = ref object
+        case kind*: LangElemKind 
+        of leChr: c*: char
+        of leList: l*: seq[LangElem]
+  
+
+  proc `$`*(this:LangElem): string =
+    case this.kind
+    of leChr: return fmt"<Char {this.c}>"
+    of leList: return fmt("<List: {this.l}>")
+
+  proc `==`*(this: LangElem, other: LangElem): bool =
+    return this.kind == other.kind
+
+
+  proc parseToNimData(data: seq[string]) : LangElem =
+    result = LangElem(kind:leList, l: @[])
+    let dataIsList = data[0][0] == '['
+    for el in data:
+      var firstchr = el[0]
+      if firstchr.isAlphaAscii():
+        var elem = LangElem(kind:leChr, c:firstchr)
+        if dataIsList == false:
+            return elem
+        else:
+             result.l[result.l.len-1].l.add(LangElem(kind:leChr, c:firstchr))
+
+      elif firstchr == '[':
+          result.l.add(LangElem(kind:leList, l: @[]))
+      
+
   var listp: Parser
-  var valref = (proc():Parser =digits|listp)
+  var valref = (proc():Parser =letters|listp)
+
   listp = charp('[') >> sep_by(charp(',').suppress(), many(valref)) >> charp(']')
   var valp = valref()
 
-  echo $valp.parse("1")
-  echo $valp.parse("[1,2]")
-  echo $valp.parse("[1,[1,2]]")
+
+  var inps = @["a", "[a,b]", "[a,[b,c]]"]
+  for inp in inps:
+      echo &"inp : {inp}"
+      let parsed = valp.parse(inp)
+      if parsed.kind == ekRight:
+          let data = parsed.val.parsed
+          echo "parsed data: " & data
+          echo inp, " => ", $parseToNimData(data)
+
+
+    
+        
+
+
+
+
+
